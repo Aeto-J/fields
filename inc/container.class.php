@@ -1091,17 +1091,28 @@ HTML;
      */
     public function updateFieldsValues($data, $itemtype, $massiveaction = false)
     {
+        global $DB;
+
         if (self::validateValues($data, $itemtype, $massiveaction) === false) {
             return false;
         }
 
         // Normalize values
+        // Get multiple fields
+        $fields = getAllDataFromTable(PluginFieldsField::getTable(), [
+               'is_active'                   => 1,
+               'multiple'                    => 1,
+               'plugin_fields_containers_id' => $data['plugin_fields_containers_id']
+        ]);
+        $fields = array_column($fields, "name");
         foreach ($data as $key => $value) {
-            if (is_array($value)) {
+            if (in_array($key, $fields)) {
                 // Convert "multiple" values into a JSON string
                 $data[$key] = json_encode($value);
             }
         }
+
+       
 
         $container_obj = new PluginFieldsContainer();
         $container_obj->getFromDB($data['plugin_fields_containers_id']);
@@ -1112,10 +1123,29 @@ HTML;
         //check if data already inserted
         $obj   = new $classname();
         $found = $obj->find(['items_id' => $items_id]);
+         
+
         if (empty($found)) {
             // add fields data
             $obj->add($data);
 
+            // Get richtext fields
+            $fields = getAllDataFromTable(PluginFieldsField::getTable(), [
+               'is_active'                   => 1,
+               'type'                        => "richtext",
+               'plugin_fields_containers_id' => $data['plugin_fields_containers_id']
+            ]);
+            $fields = array_column($fields, "name");
+            // Add files and images
+            foreach ($fields as $value) {
+               $obj->input = $obj->addFiles($obj->input, [
+                  'force_update' => true,
+                  'name'         => $value,
+                  'content_field' => $value
+               ]);
+            }
+            $data = $obj->input;
+             
             //construct history on itemtype object (Historical tab)
             self::constructHistory(
                 $data['plugin_fields_containers_id'],
@@ -1128,6 +1158,22 @@ HTML;
             $data['id'] = $first_found['id'];
             $obj->update($data);
 
+            // Get richtext fields
+            $fields = getAllDataFromTable(PluginFieldsField::getTable(), [
+               'is_active'                   => 1,
+               'type'                        => "richtext",
+               'plugin_fields_containers_id' => $data['plugin_fields_containers_id']
+            ]);
+            $fields = array_column($fields, "name");
+            // Add files and images
+            foreach ($fields as $value) {
+               $obj->input = $obj->addFiles($obj->input, [
+                  'force_update' => true,
+                  'name'         => $value,
+                  'content_field' => $value
+               ]);
+            }
+            $data = $obj->input;
             //construct history on itemtype object (Historical tab)
             self::constructHistory(
                 $data['plugin_fields_containers_id'],
@@ -1178,13 +1224,20 @@ HTML;
         //remove non-data keys
         $data = array_diff_key($data, $blacklist_k);
 
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                // Convert array values into a JSON string
+                $data[$key] = json_encode($value);
+            }
+        }
+          
         //add/update values condition
         if (empty($old_values)) {
             // -- add new item --
 
             foreach ($data as $key => $value) {
                 //log only not empty values
-                if (!empty($value)) {
+                if (!empty($value) && !str_starts_with($key, '_')) {
                     //prepare log
                     $changes = [0, "N/A", $value];
 
@@ -1229,6 +1282,9 @@ HTML;
 
             //find changes
             $updates = [];
+            $fieldsNames = array_column($searchoptions, 'linkfield');
+            $fieldsTypes = array_column($searchoptions, 'pfields_type');
+            $fieldsToDecode = array_combine($fieldsNames, $fieldsTypes);
             foreach ($old_values as $key => $old_value) {
                 if (
                     !isset($data[$key])
@@ -1238,10 +1294,19 @@ HTML;
                     continue;
                 }
 
-                if ($data[$key] !== $old_value) {
+                $temp_new_value = $data[$key];
+                $temp_old_value = $old_value;
+                if (in_array($fieldsToDecode[$key], ['richtext', 'textarea'])) {
+                    $temp_old_value = preg_replace("/\r\n/", '\r\n', $temp_old_value);
+                    $temp_old_value = preg_replace("/\n/", '\n', $temp_old_value);
+                    $temp_old_value = preg_replace("/\r/", '\r', $temp_old_value);
+                    $temp_new_value = preg_replace('/\\\\"/', '"', $temp_new_value);
+                }
+                if ($temp_new_value !== $temp_old_value) {
                     $updates[$key] = [0, $old_value ?? '', $data[$key]];
                 }
             }
+            
 
             //for all change find searchoption
             foreach ($updates as $key => $changes) {

@@ -89,4 +89,17 @@ abstract class PluginFieldsAbstractContainerInstance extends CommonDBTM
 
         return parent::getSpecificValueToDisplay($field, $values, $options);
     }
+
+    //public function post_addItem(){
+    //   $test = [];
+    //}
+    //public function post_updateItem($history = 1) {
+    //   $test = [];
+    //   $this->input = $this->addFiles($this->input, [
+    //        'force_update' => true,
+    //        'name'         => "myrichtexttestfield",
+    //        'content_field' => "myrichtexttestfield"
+    //    ]);
+    //}
+
 }
