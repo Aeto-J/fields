@@ -345,6 +345,7 @@ class PluginFieldsContainerDisplayCondition extends CommonDBChild
     {
 
         $itemtype_object = new $itemtype_class();
+        $itemtype_object->getEmpty();
         $allowed_so = [];
 
         //remove "Common"
@@ -353,6 +354,9 @@ class PluginFieldsContainerDisplayCondition extends CommonDBChild
         $allowed_table = [getTableForItemType($itemtype_class), User::getTable(), Group::getTable()];
         if ($itemtype_object->maybeLocated()) {
             array_push($allowed_table, Location::getTable());
+        }
+        if (isset($itemtype_object->fields[getForeignKeyFieldForItemType(ITILCategory::getType())])) {
+            array_push($allowed_table, ITILCategory::getTable());
         }
 
         //use relation.constant.php to allow some tables (exclude Location which is managed later)
